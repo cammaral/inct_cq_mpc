@@ -1,0 +1,18 @@
+# Regressao cos(x), QNN treinavel.
+model:
+  inputs: 1
+  width: 32
+  hidden_layers: 2
+  activation: tanh
+  n_qubits: 3
+  observables: [ZII, ZZI, ZZZ]
+  q_layers: 2
+  trainable: true
+  init_std: 0.5
+  mpc_function: sequential
+
+train:
+  seed: 1924
+  epochs: 400
+  lr: 0.01
+  points: 80
