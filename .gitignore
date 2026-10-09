@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+
+# Environment variables
+.env
+.env.*
+
+# Training results
+runs/*
+!runs/.gitkeep
+!runs/README.txt
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# Test and coverage cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.log
+*.tmp
