@@ -1,120 +1,70 @@
-# Hybrid MPC — versão inicial: somente regressão
+# INCT — MPC em PyTorch (protótipo inicial)
 
-Projeto didático e modular em **PyTorch**, com uma MLP em paralelo com uma QNN.
-Nesta versão, o único problema implementado é a **regressão de `cos(x)`**.
-Não há classificação nem PINNs implementadas.
+Comparação supervisionada de quatro arquiteturas, usando **soluções analíticas** de Burgers 1D e Black–Scholes. **Não é PINN**: só há perda MSE entre a predição e a função exata, sem resíduo de EDP.
 
-## Regra do MPC
-
-A MLP recebe `x` e produz `M` saídas `y_j(x)`. A QNN utiliza um circuito
-de `N` qubits e calcula `M` valores esperados de correlatores de Pauli.
-A conexão polinomial sequencial padrão é:
-
-\[
-\hat f(x) = \sum_{j=1}^{M} [y_j(x)+1] \langle P_j \rangle^j.
-\]
-
-**Exemplo:** `observables: [ZII, XXI, XYZ]` gera expoentes `1, 2, 3`.
-A potência depende da posição na lista, não do peso (ordem) do correlator.
-Os valores esperados são calculados no **mesmo estado** de `N` qubits.
-A QNN não recebe `x` nesta versão; o vetor de observáveis é global.
-
-## Organização
-
-```text
-hybrid_mpc_regression/
-├── src/hybrid_mpc/
-│   ├── neural_network/
-│   │   ├── classical/mlp.py       # MLP
-│   │   ├── qnn/qnn.py             # observáveis da QNN
-│   │   └── hybrid.py              # rede paralela MLP + QNN
-│   ├── quantum/
-│   │   ├── circuits.py            # circuito RY, RZ e CZ
-│   │   └── correlators.py         # <P> com I, X, Y, Z
-│   ├── mpc/
-│   │   ├── functions.py           # potências sequenciais
-│   │   └── coupling.py            # soma dos termos
-│   ├── problems/regression_example.py  # dados cos(x)
-│   ├── loss/supervised.py         # MSE
-│   ├── training/                  # otimizador e salvamento
-│   └── analysis/metrics.py       # RMSE, MAE
-├── configs/
-│   ├── regression.yaml           # QNN treinável
-│   └── regression_frozen.yaml    # QNN congelada
-├── scripts/run_regression.py
-├── notebooks/01_cosine_regression.ipynb
-├── tests/
-├── runs/
-└── pyproject.toml
-```
-
-## Instalação
-
-Execute na pasta raiz do projeto:
+## Rodar
 
 ```bash
-python -m pip install -e '.[notebook,test]'
+python -m pip install -r requirements.txt
+python run.py                         # ambos os problemas, quatro modelos
+python run.py --problem burgers       # somente Burgers
+python run.py --problem black_scholes # somente Black-Scholes
+python run.py --ablations             # ablações adicionais do config.yaml
+python -m unittest discover -s tests -v
 ```
 
-Requisitos: Python >=3.10, PyTorch, NumPy, Matplotlib e PyYAML.
-O notebook usa `ipykernel`/Jupyter. **Não precisa de PennyLane**:
-o simulador do estado quântico é implementado com operações PyTorch.
+Tudo é configurado em **`config.yaml`**. Existe **um único `run.py`**. `device: auto` escolhe CUDA quando disponível, senão CPU. A QNN é simulada diretamente em PyTorch com statevector (RY, RZ, CZ); não é necessária biblioteca quântica extra. Como o custo escala em `2**qubits`, comece com 1–4 qubits.
 
-## Notebook de cosseno
+## Modelos
 
-Abra `notebooks/01_cosine_regression.ipynb` e execute todas as células.
-Ele treina duas cópias da arquitetura com a mesma seed:
+- **MLP:** `u(x,t) = f(x,t)`.
+- **MPC clássica:** `u(x,t) = mean_i [(1 + y_i(x,t)) * z_i**i]`. Uma MLP principal recebe `(x,t)`; a MLP auxiliar recebe **apenas 1 constante fixa**, nunca `(x,t)`.
+- **MPC híbrida:** `u(x,t) = mean_i [(1 + y_i(x,t)) * <P_i>(phi_i)**i]`. Uma MLP principal recebe `(x,t)`; o **i-ésimo circuito auxiliar possui exatamente i qubits**, sem entrada de dados. `terms: 3` cria circuitos de 1, 2 e 3 qubits com observáveis padrão `Z`, `ZZ`, `ZZZ`. Troque as palavras de Pauli no YAML. Cada circuito tem seus próprios parâmetros `phi_i`.
+- **QNN de referência:** recebe `(x,t)` por angle encoding, e suas medidas alimentam uma camada linear.
 
-- QNN congelada: parâmetros `theta` não recebem gradiente.
-- QNN treinável: parâmetros `theta` recebem gradiente.
+As MPC usam `aggregation: mean` por padrão. O YAML permite `sum`, `powers: false`, circuitos congelados, observáveis diferentes, tamanhos, LR, épocas, scheduler e quantidade de dados como **ablações**. `LeakyReLU(0.1)` é bijetora de `R` em `R` nas camadas ocultas. A prova matemática da MPC deve ser verificada separadamente quanto às demais hipóteses; esta implementação não afirma uma garantia de vantagem quântica.
 
-O notebook exibe as curvas `cos(x)` e preditas, histórico da MSE,
-contribuições de cada termo MPC, valores esperados antes/depois,
-potências efetivas e métricas RMSE/MAE. Salva resultados em `runs/`
-sem sobrescrever uma execução anterior.
+## Dados analíticos
 
-Também é possível executar via terminal:
+**Burgers**: `u_t + u*u_x = nu*u_xx`. A família exata via Cole–Hopf é
 
-```bash
-python scripts/run_regression.py --config configs/regression.yaml
-python scripts/run_regression.py --config configs/regression_frozen.yaml
-```
+`u(x,t)=2 nu a pi exp(-nu pi²t) sin(pi x) / [b + a exp(-nu pi²t) cos(pi x)]`
 
-Cada execução salva `config.yaml`, `model.pt`, `history.csv`, `summary.json`.
-Se a pasta da execução já existir, o script apenas imprime `SKIP`.
+com `nu>0` e `b>|a|`. Configuração inicial: `(x,t) in [0,1]^2`, `nu=0.05`, `a=0.9`, `b=1`. Essa função tem `u(0,t)=u(1,t)=0`.
 
-## Como escolher os correlatores
+**Black–Scholes**: call europeia sem dividendos, `C=S Phi(d1)-K exp(-r tau) Phi(d2)` e payoff `max(S-K,0)` em `tau=0`. A rede aprende `C/K` para normalizar os valores; `metrics.json` inclui `rmse_price` nas unidades originais.
 
-Edite `observables` no YAML:
+Os dois problemas usam a mesma estratégia de amostragem para treino, validação e teste regular. As sementes garantem os **mesmos pontos de dados** para todas as arquiteturas sob a mesma semente.
 
-```yaml
-n_qubits: 3
-observables: [ZII, XXI, XYZ, YYY]
-```
+## Resultados
 
-`I` é identidade no qubit correspondente. A lista deve conter uma letra
-(`I`, `X`, `Y` ou `Z`) por qubit. O código mantém a ordem da lista.
-O estado é complexo e permite correlatores com Pauli-Y.
+Em `results/<problema>/summary.csv` ficam os indicadores por modelo/semente. Em `results/<problema>/<modelo>/seed_<n>/`:
 
-## Como trocar a função de conexão futuramente
+- `metrics.json`: RMSE, erro relativo L2, MAE, tempo, total de parâmetros, época ótima, coeficientes inicial/final/ótimo;
+- `history.csv` e `loss.png`: MSE de treino/validação, normas dos gradientes total/auxiliar e learning rate por época;
+- `expectations.csv` e `auxiliary_evolution.png`: **MPC híbrida**, por época, `exp_i=<P_i>`, `power_i=<P_i>**i` e `effective_i=power_i/N` para a média;
+- `coefficients.csv` e `auxiliary_evolution.png`: o mesmo acompanhamento para os coeficientes `z_i` da MPC clássica;
+- `solution.png`: solução exata, predição e mapa de erro absoluto;
+- `predictions.csv`: pontos do teste, valor real, predição, erro (normalizados por K em Black–Scholes);
+- `best.pt`: parâmetros da época com menor MSE de validação.
 
-O MPC está isolado em `src/hybrid_mpc/mpc/functions.py`.
-Para adicionar outra fórmula, crie uma função de `values` e registre-a
-no dicionário `FUNCTIONS`; depois escolha-a em `mpc_function` no YAML.
-A alternativa `linear` já existe para comparação, mas **o padrão é
-sempre `sequential`**.
+Os valores esperados evoluem em função **da época de treinamento**, não de `x,t`: os circuitos auxiliares são independentes dos dados de entrada.
 
-## Sobre a interpretação física
+## Limitações e experimentos futuros
 
-Como a QNN **não recebe a entrada** `x`, cada `<P_j>` é constante ao longo
-da malha. Quando congelada, a QNN apenas fixa fatores dos termos da MLP;
-quando treinável, esses fatores podem mudar. Isto **não prova vantagem
-quântica**. Potências altas de valores esperados próximos de zero podem
-diminuir termos e gradientes. O simulador de estado tem custo exponencial
-em `N` (dimensão `2**N`).
+Um circuito sem entrada de dados produz coeficientes globais (não features quânticas dependentes do espaço/tempo). Assim, a principal hipótese empírica é sobre **parametrização, otimização e estabilidade**, não vantagem de expressividade garantida. Para um estudo publicável, aumentar o número de sementes (por exemplo 5), comparar redes clássicas com contagem de parâmetros parecida e analisar o custo do simulador; também testar observáveis de menor módulo, já que o termo `<P_i>**i` pode suprimir gradientes para ordens grandes.
 
-## Testes
 
-```bash
-python -m pytest -q
-```
+## Matriz de ablações atualizada
+
+O `config.yaml` inclui ablações em **ambos** os problemas com o mesmo `run.py`:
+- Acoplamento: média/soma, potências ativadas/desativadas;
+- Circuitos: 1/3/4 termos (respectivamente 1...N qubits), 2/4 camadas, Pauli Z/X/misto, circuito treinável/congelado;
+- MLP: profundidade 1/3, largura 16/32, `tanh` como padrão;
+- Treino: LR inicial, LR mínimo, scheduler, número de épocas, tamanho de lote;
+- Dados: 128/256/512 pontos de treinamento;
+- Controles clássicos: MPC clássica com e sem potências, 1/3/4 termos.
+
+A primeira execução (`python run.py`) testa os quatro modelos-base nos dois problemas. `python run.py --ablations` inclui todas as variantes. Para testes estatísticos, mude `seeds` para `[0,1,2,3,4]` antes da execução completa. As ablações são **uma por vez em relação ao baseline** (não produto cartesiano), para evitar explosão de custos.
+
+**Interpretação:** como o ramo quântico auxiliar não depende da entrada, os observáveis são coeficientes globais. Diferenças de desempenho não implicam vantagem quântica, e a validade da `tanh` depende de a prova requerer injetividade + TW e inversibilidade apenas sobre a imagem.

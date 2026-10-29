@@ -1,0 +1,387 @@
+
+# ============================================================
+# INCT — Multiplicative Polynomial Coupling (MPC)
+# Burgers 1D e Black-Scholes
+# PyTorch: CPU / CUDA
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. PROBLEMAS
+# ------------------------------------------------------------
+
+problems:
+  burgers:
+    bounds: [[0.0, 1.0], [0.0, 1.0]]
+    nu: 0.05
+    a: 0.9
+    b: 1.0
+
+  black_scholes:
+    bounds: [[0.0, 160.0], [0.0, 1.0]]
+    strike: 40.0
+    rate: 0.05
+    sigma: 0.2
+
+
+# ------------------------------------------------------------
+# 2. DADOS
+# ------------------------------------------------------------
+
+data:
+  train: 300
+  val: 300
+  test_grid: 250
+
+
+# ------------------------------------------------------------
+# 3. TREINAMENTO
+# ------------------------------------------------------------
+
+training:
+  device: auto             # auto | cpu | cuda
+  epochs: 1000
+  batch_size: 300           # Full-batch para train=300
+  lr: 0.003
+  scheduler: cosine         # cosine | none
+  min_lr: 0.00001
+  clip: null                # null | 1.0
+
+
+# ------------------------------------------------------------
+# 4. REPRODUTIBILIDADE
+# ------------------------------------------------------------
+
+seeds: [1924, 1925, 1926, 1973, 2025]
+
+output: results
+
+
+# ------------------------------------------------------------
+# 5. MODELOS
+# ------------------------------------------------------------
+
+models:
+
+  # MLP convencional
+  - name: mlp
+    kind: mlp
+    width: 16
+    depth: 3
+    activation: tanh
+
+  # MPC classica
+  - name: mpc_classical
+    kind: mpc_classical
+    width: 16
+    depth: 3
+    activation: tanh
+    terms: 4
+    powers: true
+    aggregation: mean
+
+  # MPC hibrida
+  # Circuitos auxiliares independentes, sem x/t:
+  # 1 qubit  -> Z
+  # 2 qubits -> ZZ
+  # 3 qubits -> ZZZ
+  # 4 qubits -> ZZZZ
+  - name: mpc_hybrid
+    kind: mpc_hybrid
+    width: 16
+    depth: 3
+    activation: tanh
+    terms: 4
+    layers: 2
+    observables: [Z, ZZ, ZZZ, ZZZZ]
+    powers: true
+    aggregation: mean
+    quantum_trainable: true
+
+  # QNN convencional, com encoding de x/t
+  - name: qnn
+    kind: qnn
+    qubits: 4
+    layers: 2
+    observables: [ZIII, IZII, IIZI, IIIZ]
+
+
+# ============================================================
+# 6. ABLACOES
+# Cada experimento altera apenas os parametros indicados.
+# Executar com: python run.py --ablations
+# ============================================================
+
+ablations:
+
+  # ----------------------------------------------------------
+  # A. ACOPLAMENTO MPC
+  # ----------------------------------------------------------
+
+  - name: hybrid_sum
+    model: mpc_hybrid
+    changes:
+      model.aggregation: sum
+
+  - name: classical_sum
+    model: mpc_classical
+    changes:
+      model.aggregation: sum
+
+  - name: hybrid_no_powers
+    model: mpc_hybrid
+    changes:
+      model.powers: false
+
+  - name: classical_no_powers
+    model: mpc_classical
+    changes:
+      model.powers: false
+
+
+  # ----------------------------------------------------------
+  # B. NUMERO DE TERMOS MPC
+  # ----------------------------------------------------------
+
+  - name: hybrid_1term
+    model: mpc_hybrid
+    changes:
+      model.terms: 1
+      model.observables: [Z]
+
+  - name: hybrid_2terms
+    model: mpc_hybrid
+    changes:
+      model.terms: 2
+      model.observables: [Z, ZZ]
+
+  - name: hybrid_3terms
+    model: mpc_hybrid
+    changes:
+      model.terms: 3
+      model.observables: [Z, ZZ, ZZZ]
+
+  - name: classical_1term
+    model: mpc_classical
+    changes:
+      model.terms: 1
+
+  - name: classical_2terms
+    model: mpc_classical
+    changes:
+      model.terms: 2
+
+  - name: classical_3terms
+    model: mpc_classical
+    changes:
+      model.terms: 3
+
+
+  # ----------------------------------------------------------
+  # C. CORRELATORES DE PAULI
+  # ----------------------------------------------------------
+
+  # Base X
+  - name: hybrid_pauli_x
+    model: mpc_hybrid
+    changes:
+      model.observables: [X, XX, XXX, XXXX]
+
+  # Base Y
+  - name: hybrid_pauli_y
+    model: mpc_hybrid
+    changes:
+      model.observables: [Y, YY, YYY, YYYY]
+
+  # Correlatores mistos
+  - name: hybrid_mixed_pauli
+    model: mpc_hybrid
+    changes:
+      model.observables: [Z, XZ, YXZ, ZXYZ]
+
+  # Observaveis locais
+  - name: hybrid_local_z
+    model: mpc_hybrid
+    changes:
+      model.observables: [Z, ZI, ZII, ZIII]
+
+  # Correlatores de ate dois qubits
+  - name: hybrid_pair_z
+    model: mpc_hybrid
+    changes:
+      model.observables: [Z, ZZ, ZZI, ZZII]
+
+  # Correlatores com identidades intercaladas
+  - name: hybrid_sparse_z
+    model: mpc_hybrid
+    changes:
+      model.observables: [Z, ZI, ZIZ, ZIIZ]
+
+
+  # ----------------------------------------------------------
+  # D. CIRCUITOS QUANTICOS
+  # ----------------------------------------------------------
+
+  - name: hybrid_1q_layer
+    model: mpc_hybrid
+    changes:
+      model.layers: 1
+
+  - name: hybrid_4q_layers
+    model: mpc_hybrid
+    changes:
+      model.layers: 4
+
+  - name: hybrid_8q_layers
+    model: mpc_hybrid
+    changes:
+      model.layers: 8
+
+  - name: hybrid_frozen
+    model: mpc_hybrid
+    changes:
+      model.quantum_trainable: false
+
+  - name: qnn_1layer
+    model: qnn
+    changes:
+      model.layers: 1
+
+  - name: qnn_4layers
+    model: qnn
+    changes:
+      model.layers: 4
+
+
+  # ----------------------------------------------------------
+  # E. ARQUITETURA CLASSICA
+  # ----------------------------------------------------------
+
+  - name: hybrid_1layer
+    model: mpc_hybrid
+    changes:
+      model.depth: 1
+
+  - name: hybrid_2layers
+    model: mpc_hybrid
+    changes:
+      model.depth: 2
+
+  - name: hybrid_32neurons
+    model: mpc_hybrid
+    changes:
+      model.width: 32
+
+  - name: hybrid_64neurons
+    model: mpc_hybrid
+    changes:
+      model.width: 64
+
+  - name: mlp_32neurons
+    model: mlp
+    changes:
+      model.width: 32
+
+  - name: mlp_64neurons
+    model: mlp
+    changes:
+      model.width: 64
+
+
+  # ----------------------------------------------------------
+  # F. LEARNING RATE
+  # ----------------------------------------------------------
+
+  - name: hybrid_lr_001
+    model: mpc_hybrid
+    changes:
+      training.lr: 0.001
+
+  - name: hybrid_lr_0001
+    model: mpc_hybrid
+    changes:
+      training.lr: 0.0001
+
+
+  # ----------------------------------------------------------
+  # G. SCHEDULER
+  # ----------------------------------------------------------
+
+  - name: hybrid_no_scheduler
+    model: mpc_hybrid
+    changes:
+      training.scheduler: none
+
+  - name: hybrid_min_lr_0001
+    model: mpc_hybrid
+    changes:
+      training.min_lr: 0.0001
+
+
+  # ----------------------------------------------------------
+  # H. NUMERO DE EPOCAS
+  # ----------------------------------------------------------
+
+  - name: hybrid_2000epochs
+    model: mpc_hybrid
+    changes:
+      training.epochs: 2000
+
+  - name: hybrid_5000epochs
+    model: mpc_hybrid
+    changes:
+      training.epochs: 5000
+
+
+  # ----------------------------------------------------------
+  # I. QUANTIDADE DE DADOS
+  # ----------------------------------------------------------
+
+  - name: hybrid_128points
+    model: mpc_hybrid
+    changes:
+      data.train: 128
+
+  - name: hybrid_512points
+    model: mpc_hybrid
+    changes:
+      data.train: 512
+
+  - name: hybrid_1000points
+    model: mpc_hybrid
+    changes:
+      data.train: 1000
+
+
+  # ----------------------------------------------------------
+  # J. BATCH SIZE
+  # ----------------------------------------------------------
+
+  - name: hybrid_batch_32
+    model: mpc_hybrid
+    changes:
+      training.batch_size: 32
+
+  - name: hybrid_batch_64
+    model: mpc_hybrid
+    changes:
+      training.batch_size: 64
+
+
+  # ----------------------------------------------------------
+  # K. GRADIENT CLIPPING
+  # ----------------------------------------------------------
+
+  - name: hybrid_clipping
+    model: mpc_hybrid
+    changes:
+      training.clip: 1.0
+
+  - name: mlp_clipping
+    model: mlp
+    changes:
+      training.clip: 1.0
+
+  - name: classical_clipping
+    model: mpc_classical
+    changes:
+      training.clip: 1.0
