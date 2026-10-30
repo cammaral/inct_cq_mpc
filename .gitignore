@@ -4,3 +4,18 @@ __pycache__/
 runs/
 .ipynb_checkpoints/
 .pytest_cache/
+.venv/
+
+# Resultados e logs do cluster
+results/
+results_*/
+ablacoes_*.csv
+*.o[0-9]*
+*.e[0-9]*
+
+# Configuracoes geradas por seed
+config_[0-9]*.yaml
+
+# Arquivos Python
+__pycache__/
+*.pyc

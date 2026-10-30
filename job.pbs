@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -N inct_mpc
+#PBS -q workq
+#PBS -l select=1:ncpus=2:mem=4gb
+#PBS -l walltime=12:00:00
+#PBS -j oe
+
+cd "$PBS_O_WORKDIR"
+
+export OMP_NUM_THREADS=2
+export MKL_NUM_THREADS=2
+
+PYTHON="$HOME/miniforge3/envs/mpc/bin/python"
+
+args=()
+if [ -n "$PROBLEM" ]; then args+=(--problem "$PROBLEM"); fi
+if [ "$ABL" = "1" ]; then args+=(--ablations); fi
+
+"$PYTHON" -u run.py --config "${CONFIG:-config.yaml}" "${args[@]}"
