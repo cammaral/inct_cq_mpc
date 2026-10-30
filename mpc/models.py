@@ -116,12 +116,14 @@ class Model(nn.Module):
                 words = cfg.get("observables", ["Z" * i for i in range(1, self.terms + 1)])
                 if len(words) != self.terms:
                     raise ValueError("Informe um observavel por termo MPC")
-                # O i-esimo circuito SEM entrada usa EXATAMENTE i qubits.
-                self.aux = nn.ModuleList([
-                    Circuit(i, int(cfg.get("layers", 2)), [word],
-                            bool(cfg.get("quantum_trainable", True)))
-                    for i, word in enumerate(words, start=1)
-                ])
+                # Um unico circuito compartilhado por todos os termos.
+                qubits = int(cfg.get("qubits", self.terms))
+                self.aux = Circuit(
+                    qubits,
+                    int(cfg.get("layers", 2)),
+                    words,
+                    bool(cfg.get("quantum_trainable", True))
+                )
             # Comeca com termos (1 + y_i) moderados para treinar sem grandes erros.
             nn.init.constant_(self.main[-1].bias, float(cfg.get("main_bias_init", -0.7)))
         elif self.kind == "qnn":
@@ -137,7 +139,7 @@ class Model(nn.Module):
         if self.kind == "mpc_classical":
             return self.aux(self.one).flatten()
         if self.kind == "mpc_hybrid":
-            return torch.cat([circuit().flatten() for circuit in self.aux])
+            return self.aux().flatten()
         raise ValueError("Somente as MPC possuem coeficientes auxiliares")
 
     def forward(self, x):

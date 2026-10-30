@@ -1,0 +1,103 @@
+# ============================================================
+# INCT MPC — BURGERS
+# ETAPA 1: NUMERO DE NEURONIOS DA MLP
+# ============================================================
+
+problems:
+  burgers:
+    bounds: [[0.0, 1.0], [0.0, 1.0]]
+    nu: 0.05
+    a: 0.9
+    b: 1.0
+
+data:
+  train: 300
+  val: 300
+  test_grid: 250
+
+training:
+  device: cpu
+  epochs: 1000
+  batch_size: 300
+  lr: 0.003
+  scheduler: cosine
+  min_lr: 0.00001
+  clip: null
+
+seeds: [1924, 1925, 1926, 1973, 2025, 2024, 2012, 1958, 1962, 1997]
+
+output: results
+
+models:
+  # Referencia: 32 neuronios, 3 camadas
+  - name: mlp
+    kind: mlp
+    width: 32
+    depth: 3
+    activation: tanh
+
+ablations:
+  # ETAPA 1 — Largura
+  - {name: mlp_width_8, model: mlp,
+     changes: {model.width: 8}}
+
+  - {name: mlp_width_16, model: mlp,
+     changes: {model.width: 16}}
+
+  - {name: mlp_width_64, model: mlp,
+     changes: {model.width: 64}}
+
+  - {name: mlp_width_128, model: mlp,
+     changes: {model.width: 128}}
+
+  # ETAPA 2 — Profundidade (64 neuronios)
+  - {name: mlp_64_depth_1, model: mlp,
+     changes: {model.width: 64, model.depth: 1}}
+
+  - {name: mlp_64_depth_2, model: mlp,
+     changes: {model.width: 64, model.depth: 2}}
+
+  - {name: mlp_64_depth_3, model: mlp,
+     changes: {model.width: 64, model.depth: 3}}
+
+  - {name: mlp_64_depth_4, model: mlp,
+     changes: {model.width: 64, model.depth: 4}}
+
+  - {name: mlp_64_depth_10, model: mlp,
+     changes: {model.width: 64, model.depth: 10}}
+  - {name: mlp_64_depth_15, model: mlp,
+     changes: {model.width: 64, model.depth: 15}}
+  - {name: mlp_64_depth_20, model: mlp,
+     changes: {model.width: 64, model.depth: 20}}
+  # ETAPA 3 — Learning rate (64 neuronios, 15 camadas)
+  - {name: mlp_64_depth15_lr_0001, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.0001}}
+
+  - {name: mlp_64_depth15_lr_0003, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.0003}}
+
+  - {name: mlp_64_depth15_lr_001, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.001}}
+
+  - {name: mlp_64_depth15_lr_003, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.003}}
+
+  - {name: mlp_64_depth15_lr_01, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.01}}
+
+  # ETAPA 4 — Scheduler (64 neuronios, 15 camadas, LR=0.003)
+  - {name: mlp_64_depth15_no_scheduler, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.003, training.scheduler: none}}
+
+  # ETAPA 5 — Numero de epocas
+  - {name: mlp_epochs_500, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.003, training.scheduler: none, training.epochs: 500}}
+
+  - {name: mlp_epochs_2000, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.003, training.scheduler: none, training.epochs: 2000}}
+
+  - {name: mlp_epochs_5000, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.003, training.scheduler: none, training.epochs: 5000}}
+
+  - {name: mlp_epochs_10000, model: mlp,
+     changes: {model.width: 64, model.depth: 15, training.lr: 0.003, training.scheduler: none, training.epochs: 10000}}

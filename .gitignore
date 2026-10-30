@@ -1,21 +1,72 @@
-.venv/
+# ========================================
+# Python
+# ========================================
 __pycache__/
-*.pyc
-runs/
-.ipynb_checkpoints/
+*.py[cod]
+*.egg-info/
 .pytest_cache/
-.venv/
+.mypy_cache/
+.ruff_cache/
 
-# Resultados e logs do cluster
+# ========================================
+# Ambientes virtuais
+# ========================================
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# ========================================
+# Jupyter
+# ========================================
+.ipynb_checkpoints/
+
+# ========================================
+# Resultados dos experimentos
+# ========================================
+runs/
 results/
 results_*/
-ablacoes_*.csv
+outputs/
+checkpoints/
+
+# ========================================
+# Pesos dos modelos
+# ========================================
+*.pt
+*.pth
+*.ckpt
+
+# ========================================
+# Logs e arquivos do cluster
+# ========================================
+*.log
+*.out
+*.err
 *.o[0-9]*
 *.e[0-9]*
 
-# Configuracoes geradas por seed
-config_[0-9]*.yaml
+# ========================================
+# Dados gerados
+# ========================================
+*.csv
+*.parquet
+*.npy
+*.npz
 
-# Arquivos Python
-__pycache__/
-*.pyc
+# ========================================
+# Arquivos compactados
+# ========================================
+*.zip
+*.tar
+*.tar.gz
+
+# ========================================
+# Sistema operacional e IDE
+# ========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

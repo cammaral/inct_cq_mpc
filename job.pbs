@@ -5,15 +5,64 @@
 #PBS -l walltime=12:00:00
 #PBS -j oe
 
+set -euo pipefail
 cd "$PBS_O_WORKDIR"
-
-export OMP_NUM_THREADS=2
-export MKL_NUM_THREADS=2
 
 PYTHON="$HOME/miniforge3/envs/mpc/bin/python"
 
-args=()
-if [ -n "$PROBLEM" ]; then args+=(--problem "$PROBLEM"); fi
-if [ "$ABL" = "1" ]; then args+=(--ablations); fi
+# Pasta exclusiva para cada job PBS
+JOB_ID="${PBS_JOBID%%.*}"
+RUN_DIR="$PBS_O_WORKDIR/runs/jobs/$JOB_ID"
 
-"$PYTHON" -u run.py --config "${CONFIG:-config.yaml}" "${args[@]}"
+mkdir -p "$RUN_DIR"
+
+# Guardar o status de saida
+trap 'status=$?; printf "%s\n" "$status" > "$RUN_DIR/exit_code.txt"' EXIT
+
+export OMP_NUM_THREADS=2
+export MKL_NUM_THREADS=2
+export OPENBLAS_NUM_THREADS=2
+
+# Criar copia do YAML com output exclusivo
+"$PYTHON" - "${CONFIG:-config.yaml}" "$RUN_DIR" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+source = Path(sys.argv[1])
+folder = Path(sys.argv[2])
+
+config = yaml.safe_load(source.read_text())
+config["output"] = str(folder / "results")
+
+(folder / "config.yaml").write_text(
+    yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+)
+PY
+
+# Registrar a configuracao e versao do codigo
+cp job.pbs "$RUN_DIR/job.pbs"
+git rev-parse HEAD > "$RUN_DIR/git_commit.txt" 2>/dev/null || true
+git status --short > "$RUN_DIR/git_status.txt" 2>/dev/null || true
+
+echo "Job: $PBS_JOBID"
+echo "No: $(hostname)"
+echo "Diretorio: $RUN_DIR"
+echo "Inicio: $(date)"
+
+args=(--config "$RUN_DIR/config.yaml")
+
+if [[ -n "${PROBLEM:-}" ]]; then
+    args+=(--problem "$PROBLEM")
+fi
+
+if [[ -n "${ABLATION:-}" ]]; then
+    args+=(--ablation "$ABLATION")
+elif [[ "${ABL:-0}" == "1" ]]; then
+    args+=(--ablations)
+fi
+
+# Log continuo dentro da pasta do job
+"$PYTHON" -u run.py "${args[@]}" 2>&1 | tee "$RUN_DIR/run.log"
+
+echo "Fim: $(date)"

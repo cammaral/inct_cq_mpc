@@ -19,22 +19,45 @@ def main():
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--problem", choices=["burgers", "black_scholes"])
     parser.add_argument("--ablations", action="store_true")
+    parser.add_argument("--ablation", type=str, default=None)
+    parser.add_argument(
+        "--ablation-group",
+        choices=["width", "depth", "lr", "epochs", "scheduler", "batch"],
+        default=None,
+    )
     args = parser.parse_args()
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
-    variants = [(copy.deepcopy(cfg), m) for m in cfg["models"]]
-    if args.ablations:
-        by_name = {model["name"]: model for model in cfg["models"]}
-        for ablation in cfg.get("ablations", []):
-            altered = copy.deepcopy(cfg)
-            base = copy.deepcopy(by_name[ablation["model"]])
-            base["name"] = ablation["name"]
-            for path, value in ablation["changes"].items():
-                if path.startswith("model."):
-                    set_path(base, path.removeprefix("model."), value)
-                else:
-                    set_path(altered, path, value)
-            variants.append((altered, base))
+    if args.ablation and args.ablations:
+        parser.error("Use --ablation OU --ablations, nao ambos.")
+
+    by_name = {m["name"]: m for m in cfg["models"]}
+
+    if args.ablation:
+        selected = [
+            a for a in cfg.get("ablations", [])
+            if a["name"] == args.ablation
+        ]
+        if not selected:
+            parser.error(f"Ablacao desconhecida: {args.ablation}")
+        variants = []
+    else:
+        variants = [(copy.deepcopy(cfg), m) for m in cfg["models"]]
+        selected = cfg.get("ablations", []) if args.ablations else []
+
+    for ablation in selected:
+        altered = copy.deepcopy(cfg)
+        base = copy.deepcopy(by_name[ablation["model"]])
+        base["name"] = ablation["name"]
+
+        for path, value in ablation["changes"].items():
+            if path.startswith("model."):
+                set_path(base, path.removeprefix("model."), value)
+            else:
+                set_path(altered, path, value)
+
+        variants.append((altered, base))
+
     problems = [args.problem] if args.problem else list(cfg["problems"])
     for problem in problems:
         folder = Path(cfg.get("output", "results"))/problem
